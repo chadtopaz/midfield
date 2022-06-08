@@ -6,6 +6,8 @@ library(tidyverse)
 library(readxl)
 library(caret)
 library(MatchIt)
+library(lmtest)
+library(sandwich)
 library(multcomp)
 library(broom)
 
@@ -132,7 +134,7 @@ data <- merge(data, stemdfwcount)
 # Rename/reorder variables
 # Throw away incomplete records
 data <- data %>%
-  dplyr::select(institution, sex, race, act_comp, nostemintent, stemdegree, stemdfw) %>%
+  dplyr::select(id, institution, sex, race, act_comp, nostemintent, stemdegree, stemdfw) %>%
   dplyr::mutate(sex = dplyr::case_when(
     sex == "Male" ~ "male",
     sex == "Female" ~ "female",
@@ -145,16 +147,15 @@ data <- data %>%
   droplevels
 
 # Matching to balance data
-mat <- matchit(stemdfw ~ sex*race*nostemintent*stemdegree, data = data, method = "cem")
+mat <- matchit(stemdfw ~ sex + race + nostemintent, data = data, method = "nearest")
 mat.sum <- summary(mat)
 plot(mat.sum)
-modeldata <- match.data(mat, drop.unmatched = TRUE) %>%
-  dplyr::mutate(subclass = factor(subclass)) %>%
-  dplyr::mutate(subclass = relevel(subclass, ref = "2"))
+modeldata <- match.data(mat, drop.unmatched = TRUE)
 
 # Create model
-M <- glm(stemdegree ~ act + nostemintent + race*stemdfw,
+M <- glm(stemdegree ~ act + nostemintent + institution + sex*race*stemdfw,
           weights = weights, data = modeldata, family = "binomial")
+summary(M)
 S <- step(M)
 summary(S)
 
